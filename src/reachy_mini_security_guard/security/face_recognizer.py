@@ -1,11 +1,12 @@
 """Face recognition using OpenCV DNN (no CMake/dlib required).
 
 Uses YuNet for face detection and SFace for face embeddings.
-Both models are small ONNX files that work on resource-constrained devices.
+Both models are small ONNX files (~5MB total) downloaded from Hugging Face.
+Works on resource-constrained devices like Raspberry Pi.
 """
 
 import logging
-import urllib.request
+import os
 from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
@@ -13,48 +14,56 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 from numpy.typing import NDArray
+from huggingface_hub import hf_hub_download
 
 from reachy_mini_security_guard.security.face_database import FaceDatabase
 
 
 logger = logging.getLogger(__name__)
 
-# Model URLs (official OpenCV models)
-YUNET_URL = "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
-SFACE_URL = "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx"
+# Hugging Face model repository
+# Uses opencv/opencv_zoo which hosts official OpenCV models
+HF_REPO_ID = os.environ.get("FACE_MODEL_REPO", "opencv/opencv_zoo")
 
-# Default model cache directory
-MODEL_CACHE_DIR = Path.home() / ".cache" / "reachy_mini_security_guard" / "models"
+# Model filenames within the repository
+YUNET_FILENAME = "face_detection_yunet/face_detection_yunet_2023mar.onnx"
+SFACE_FILENAME = "face_recognition_sface/face_recognition_sface_2021dec.onnx"
 
 
-def _download_model(url: str, target_path: Path) -> None:
-    """Download a model file if not already cached."""
-    target_path.parent.mkdir(parents=True, exist_ok=True)
+def _download_model_from_hf(filename: str, repo_id: str = HF_REPO_ID) -> Path:
+    """Download a model from Hugging Face Hub.
     
-    if target_path.exists():
-        logger.debug("Model already cached: %s", target_path)
-        return
-    
-    logger.info("Downloading model from %s ...", url)
+    Args:
+        filename: Path to file within the repository.
+        repo_id: Hugging Face repository ID.
+        
+    Returns:
+        Local path to the downloaded model.
+    """
+    logger.info("Downloading %s from %s ...", filename, repo_id)
     try:
-        urllib.request.urlretrieve(url, target_path)
-        logger.info("Model downloaded to %s", target_path)
+        local_path = hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            repo_type="model",
+        )
+        logger.info("Model cached at %s", local_path)
+        return Path(local_path)
     except Exception as e:
-        logger.error("Failed to download model: %s", e)
+        logger.error("Failed to download model %s: %s", filename, e)
         raise
 
 
-def _ensure_models(cache_dir: Path = MODEL_CACHE_DIR) -> tuple[Path, Path]:
+def _ensure_models() -> tuple[Path, Path]:
     """Ensure face detection and recognition models are available.
+    
+    Downloads from Hugging Face Hub if not already cached.
     
     Returns:
         Tuple of (yunet_path, sface_path).
     """
-    yunet_path = cache_dir / "face_detection_yunet_2023mar.onnx"
-    sface_path = cache_dir / "face_recognition_sface_2021dec.onnx"
-    
-    _download_model(YUNET_URL, yunet_path)
-    _download_model(SFACE_URL, sface_path)
+    yunet_path = _download_model_from_hf(YUNET_FILENAME)
+    sface_path = _download_model_from_hf(SFACE_FILENAME)
     
     return yunet_path, sface_path
 
@@ -83,7 +92,6 @@ class FaceRecognizer:
         database: FaceDatabase,
         confidence_threshold: float = 0.6,
         detection_score_threshold: float = 0.7,
-        model_cache_dir: Optional[Path] = None,
     ):
         """Initialize the face recognizer.
 
@@ -92,15 +100,13 @@ class FaceRecognizer:
             confidence_threshold: Minimum confidence to consider a match (0-1).
                                  Higher values are stricter.
             detection_score_threshold: Minimum score for face detection (0-1).
-            model_cache_dir: Directory to cache model files.
         """
         self.database = database
         self.confidence_threshold = confidence_threshold
         self.detection_score_threshold = detection_score_threshold
         
-        # Download/load models
-        cache_dir = model_cache_dir or MODEL_CACHE_DIR
-        yunet_path, sface_path = _ensure_models(cache_dir)
+        # Download/load models from Hugging Face (cached automatically)
+        yunet_path, sface_path = _ensure_models()
         
         # Initialize face detector (YuNet)
         # Input size will be set dynamically based on image

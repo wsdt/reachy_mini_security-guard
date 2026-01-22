@@ -34,7 +34,7 @@ A security guard application for the Reachy Mini robot with face recognition cap
 > [!IMPORTANT]
 > Before using this app, you need to install [Reachy Mini's SDK](https://github.com/pollen-robotics/reachy_mini/).
 
-Face recognition uses **OpenCV DNN** with lightweight ONNX models (YuNet + SFace). No CMake or dlib compilation required! Models are automatically downloaded on first run (~5MB total).
+Face recognition uses **OpenCV DNN** with lightweight ONNX models (YuNet + SFace) downloaded from Hugging Face. No CMake or dlib compilation required! Models are automatically cached on first run (~5MB total).
 
 ### Using uv
 
