@@ -51,7 +51,7 @@ class FaceDatabase:
 
         # In-memory state
         self._faces: dict[str, FaceRecord] = {}
-        self._embeddings: NDArray[np.float64] | None = None
+        self._embeddings: NDArray[np.floating] | None = None  # float32 or float64
         self._embedding_to_face: dict[int, str] = {}  # embedding index -> face id
 
         # Ensure directories exist
@@ -122,7 +122,7 @@ class FaceDatabase:
     def add_face(
         self,
         name: str,
-        embeddings: list[NDArray[np.float64]],
+        embeddings: list[NDArray[np.floating]],
         images: Optional[list[tuple[str, bytes]]] = None,
     ) -> tuple[bool, str]:
         """Add a new face to the database.
@@ -267,7 +267,7 @@ class FaceDatabase:
             for record in self._faces.values()
         ]
 
-    def get_all_embeddings(self) -> tuple[NDArray[np.float64] | None, list[str]]:
+    def get_all_embeddings(self) -> tuple[NDArray[np.floating] | None, list[str]]:
         """Get all embeddings and their corresponding face IDs.
 
         Returns:

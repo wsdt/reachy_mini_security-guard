@@ -30,8 +30,8 @@ dependencies = [
     "eclipse-zenoh~=1.7.0",
     "gradio_client>=1.13.3",
 
-    #Face recognition (core dependency for security guard)
-    "face_recognition>=1.3.0",
+    # Face recognition uses OpenCV DNN (YuNet + SFace)
+    # No extra dependencies - opencv-python already included above
 ]
 
 [project.optional-dependencies]

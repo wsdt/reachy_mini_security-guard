@@ -1,9 +1,12 @@
-"""Face recognition using the face_recognition library.
+"""Face recognition using OpenCV DNN (no CMake/dlib required).
 
-Provides face encoding and matching functionality.
+Uses YuNet for face detection and SFace for face embeddings.
+Both models are small ONNX files that work on resource-constrained devices.
 """
 
 import logging
+import urllib.request
+from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
 
@@ -16,17 +19,44 @@ from reachy_mini_security_guard.security.face_database import FaceDatabase
 
 logger = logging.getLogger(__name__)
 
-# Try to import face_recognition, provide helpful error if not available
-try:
-    import face_recognition
-    FACE_RECOGNITION_AVAILABLE = True
-except ImportError:
-    FACE_RECOGNITION_AVAILABLE = False
-    logger.warning(
-        "face_recognition library not available. "
-        "Install with: pip install face_recognition "
-        "(requires cmake and dlib)"
-    )
+# Model URLs (official OpenCV models)
+YUNET_URL = "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
+SFACE_URL = "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx"
+
+# Default model cache directory
+MODEL_CACHE_DIR = Path.home() / ".cache" / "reachy_mini_security_guard" / "models"
+
+
+def _download_model(url: str, target_path: Path) -> None:
+    """Download a model file if not already cached."""
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    if target_path.exists():
+        logger.debug("Model already cached: %s", target_path)
+        return
+    
+    logger.info("Downloading model from %s ...", url)
+    try:
+        urllib.request.urlretrieve(url, target_path)
+        logger.info("Model downloaded to %s", target_path)
+    except Exception as e:
+        logger.error("Failed to download model: %s", e)
+        raise
+
+
+def _ensure_models(cache_dir: Path = MODEL_CACHE_DIR) -> tuple[Path, Path]:
+    """Ensure face detection and recognition models are available.
+    
+    Returns:
+        Tuple of (yunet_path, sface_path).
+    """
+    yunet_path = cache_dir / "face_detection_yunet_2023mar.onnx"
+    sface_path = cache_dir / "face_recognition_sface_2021dec.onnx"
+    
+    _download_model(YUNET_URL, yunet_path)
+    _download_model(SFACE_URL, sface_path)
+    
+    return yunet_path, sface_path
 
 
 @dataclass
@@ -41,28 +71,58 @@ class RecognizedFace:
 
 
 class FaceRecognizer:
-    """Face recognition using face_recognition library."""
+    """Face recognition using OpenCV DNN (YuNet + SFace).
+    
+    This implementation uses lightweight ONNX models that work on
+    resource-constrained devices like Raspberry Pi without needing
+    CMake or dlib compilation.
+    """
 
     def __init__(
         self,
         database: FaceDatabase,
         confidence_threshold: float = 0.6,
+        detection_score_threshold: float = 0.7,
+        model_cache_dir: Optional[Path] = None,
     ):
         """Initialize the face recognizer.
 
         Args:
             database: FaceDatabase instance for known faces.
             confidence_threshold: Minimum confidence to consider a match (0-1).
-                                 Lower values are stricter (require closer match).
+                                 Higher values are stricter.
+            detection_score_threshold: Minimum score for face detection (0-1).
+            model_cache_dir: Directory to cache model files.
         """
-        if not FACE_RECOGNITION_AVAILABLE:
-            raise ImportError(
-                "face_recognition library is required. "
-                "Install with: pip install face_recognition"
-            )
-
         self.database = database
         self.confidence_threshold = confidence_threshold
+        self.detection_score_threshold = detection_score_threshold
+        
+        # Download/load models
+        cache_dir = model_cache_dir or MODEL_CACHE_DIR
+        yunet_path, sface_path = _ensure_models(cache_dir)
+        
+        # Initialize face detector (YuNet)
+        # Input size will be set dynamically based on image
+        self._detector = cv2.FaceDetectorYN.create(
+            str(yunet_path),
+            "",
+            (320, 320),  # Default size, will be updated per-image
+            score_threshold=detection_score_threshold,
+            nms_threshold=0.3,
+            top_k=5000,
+        )
+        
+        # Initialize face recognizer (SFace)
+        self._recognizer = cv2.FaceRecognizerSF.create(
+            str(sface_path),
+            "",
+        )
+        
+        logger.info(
+            "Face recognizer initialized (YuNet + SFace, threshold=%.2f)",
+            confidence_threshold,
+        )
 
         # Cache for known embeddings (refreshed when database changes)
         self._known_embeddings: NDArray[np.float64] | None = None
@@ -87,11 +147,72 @@ class FaceRecognizer:
         """Mark cache as invalid (call after database changes)."""
         self._cache_valid = False
 
+    def _detect_faces(
+        self,
+        image: NDArray[np.uint8],
+    ) -> list[NDArray[np.float32]]:
+        """Detect faces in an image using YuNet.
+        
+        Args:
+            image: BGR image (OpenCV format).
+            
+        Returns:
+            List of face detections. Each detection is an array with:
+            [x, y, w, h, x_re, y_re, x_le, y_le, x_nt, y_nt, x_rcm, y_rcm, x_lcm, y_lcm, score]
+            where re=right eye, le=left eye, nt=nose tip, rcm/lcm=right/left corner mouth
+        """
+        h, w = image.shape[:2]
+        self._detector.setInputSize((w, h))
+        
+        _, faces = self._detector.detect(image)
+        
+        if faces is None:
+            return []
+        
+        return [face for face in faces if face[-1] >= self.detection_score_threshold]
+
+    def _get_face_embedding(
+        self,
+        image: NDArray[np.uint8],
+        face: NDArray[np.float32],
+    ) -> NDArray[np.float32]:
+        """Get face embedding using SFace.
+        
+        Args:
+            image: BGR image.
+            face: Face detection from YuNet.
+            
+        Returns:
+            128-dimensional face embedding.
+        """
+        # Align and crop face
+        aligned_face = self._recognizer.alignCrop(image, face)
+        
+        # Get embedding
+        embedding = self._recognizer.feature(aligned_face)
+        
+        return embedding.flatten()
+
+    def _face_to_bbox(
+        self,
+        face: NDArray[np.float32],
+    ) -> tuple[int, int, int, int]:
+        """Convert YuNet face detection to bbox format (top, right, bottom, left).
+        
+        Args:
+            face: YuNet detection [x, y, w, h, ...].
+            
+        Returns:
+            Bounding box as (top, right, bottom, left).
+        """
+        x, y, w, h = int(face[0]), int(face[1]), int(face[2]), int(face[3])
+        return (y, x + w, y + h, x)  # top, right, bottom, left
+
     def encode_faces_from_image(
         self,
         image: NDArray[np.uint8],
         max_faces: int = 10,
-    ) -> list[tuple[NDArray[np.float64], tuple[int, int, int, int]]]:
+    ) -> list[tuple[NDArray[np.float32], tuple[int, int, int, int]]]:
         """Extract face encodings from an image.
 
         Args:
@@ -101,25 +222,24 @@ class FaceRecognizer:
         Returns:
             List of (encoding, bbox) tuples.
         """
-        if not FACE_RECOGNITION_AVAILABLE:
+        faces = self._detect_faces(image)
+        
+        if not faces:
             return []
-
-        # Convert BGR to RGB (face_recognition expects RGB)
-        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-        # Find face locations
-        face_locations = face_recognition.face_locations(rgb_image, model="hog")
-
-        if not face_locations:
-            return []
-
+        
         # Limit number of faces
-        face_locations = face_locations[:max_faces]
-
-        # Get encodings for each face
-        encodings = face_recognition.face_encodings(rgb_image, face_locations)
-
-        return list(zip(encodings, face_locations))
+        faces = faces[:max_faces]
+        
+        results = []
+        for face in faces:
+            try:
+                embedding = self._get_face_embedding(image, face)
+                bbox = self._face_to_bbox(face)
+                results.append((embedding, bbox))
+            except Exception as e:
+                logger.warning("Failed to encode face: %s", e)
+        
+        return results
 
     def identify_faces(
         self,
@@ -133,9 +253,6 @@ class FaceRecognizer:
         Returns:
             List of RecognizedFace results.
         """
-        if not FACE_RECOGNITION_AVAILABLE:
-            return []
-
         # Refresh cache if needed
         if not self._cache_valid:
             self._refresh_cache()
@@ -160,21 +277,25 @@ class FaceRecognizer:
                 ))
                 continue
 
-            # Calculate face distances (lower = more similar)
-            distances = face_recognition.face_distance(self._known_embeddings, encoding)
-
-            # Find best match
-            best_idx = int(np.argmin(distances))
-            best_distance = distances[best_idx]
-
-            # Convert distance to confidence (0-1, higher = better)
-            # face_recognition uses Euclidean distance, typical threshold is 0.6
-            # distance of 0 = perfect match, distance of 1+ = very different
-            confidence = max(0.0, 1.0 - best_distance)
+            # Find best match using cosine similarity
+            best_score = -1.0
+            best_idx = -1
+            
+            for i, known_emb in enumerate(self._known_embeddings):
+                # SFace uses cosine similarity (higher = more similar)
+                score = self._recognizer.match(
+                    encoding.reshape(1, -1),
+                    known_emb.reshape(1, -1).astype(np.float32),
+                    cv2.FaceRecognizerSF_FR_COSINE,
+                )
+                if score > best_score:
+                    best_score = score
+                    best_idx = i
+            
+            # Convert score to confidence (SFace cosine is already 0-1)
+            confidence = max(0.0, min(1.0, best_score))
 
             # Check if match is good enough
-            # Note: confidence_threshold here means minimum confidence required
-            # So we compare confidence >= threshold
             if confidence >= self.confidence_threshold:
                 face_id = self._known_face_ids[best_idx]
                 name = self.database.get_face_name(face_id)
@@ -199,7 +320,7 @@ class FaceRecognizer:
     def encode_enrollment_images(
         self,
         images: list[NDArray[np.uint8]],
-    ) -> tuple[list[NDArray[np.float64]], int, int]:
+    ) -> tuple[list[NDArray[np.float32]], int, int]:
         """Encode faces from enrollment images.
 
         Args:
@@ -208,10 +329,7 @@ class FaceRecognizer:
         Returns:
             Tuple of (encodings, successful_count, failed_count).
         """
-        if not FACE_RECOGNITION_AVAILABLE:
-            return [], 0, len(images)
-
-        encodings: list[NDArray[np.float64]] = []
+        encodings: list[NDArray[np.float32]] = []
         failed = 0
 
         for image in images:
