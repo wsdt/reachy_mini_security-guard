@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reachy Mini Security Guard – Settings</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="ambient"></div>
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p>Loading…</p>
+    </div>
+    <div class="container">
+      <header class="hero">
+        <div class="pill">🛡️ Security Guard</div>
+        <h1>Reachy Mini Security Guard</h1>
+        <p class="subtitle">Face recognition security system with personalized greetings.</p>
+      </header>
+
+      <!-- Security Panel - Main control panel -->
+      <div id="security-panel" class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Security</p>
+            <h2>Security Control</h2>
+          </div>
+          <span id="security-status-chip" class="chip">Loading...</span>
+        </div>
+
+        <!-- Arm/Disarm Toggle -->
+        <div class="section">
+          <div class="section-heading">
+            <h3>System Status</h3>
+            <p class="muted small">Arm or disarm the security monitoring system.</p>
+          </div>
+          <div class="arm-toggle-row">
+            <button id="arm-btn" class="arm-btn">🛡️ ARM</button>
+            <button id="disarm-btn" class="disarm-btn ghost">🔓 DISARM</button>
+            <span id="arm-status" class="status"></span>
+          </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="section">
+          <div class="section-heading">
+            <h3>Settings</h3>
+            <p class="muted small">Configure recognition and alert behavior.</p>
+          </div>
+          <div class="row">
+            <label for="recognition-hz">Recognition Frequency</label>
+            <div class="slider-row">
+              <input type="range" id="recognition-hz" min="0.5" max="10" step="0.5" value="2" />
+              <span id="recognition-hz-value">2 Hz</span>
+            </div>
+          </div>
+          <div class="row">
+            <label for="confidence-threshold">Confidence Threshold</label>
+            <div class="slider-row">
+              <input type="range" id="confidence-threshold" min="30" max="90" step="5" value="60" />
+              <span id="confidence-threshold-value">60%</span>
+            </div>
+          </div>
+          <div class="row">
+            <label for="unknown-cooldown">Unknown Face Cooldown</label>
+            <div class="slider-row">
+              <input type="range" id="unknown-cooldown" min="1" max="30" step="1" value="5" />
+              <span id="unknown-cooldown-value">5 min</span>
+            </div>
+          </div>
+          <div class="row">
+            <label for="greeting-cooldown">Greeting Cooldown</label>
+            <div class="slider-row">
+              <input type="range" id="greeting-cooldown" min="1" max="60" step="1" value="10" />
+              <span id="greeting-cooldown-value">10 min</span>
+            </div>
+          </div>
+          <div class="row row-save">
+            <label></label>
+            <div class="actions">
+              <button id="save-settings-btn" class="ghost">Save Settings</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Face Enrollment -->
+        <div class="section">
+          <div class="section-heading">
+            <h3>Enrolled Faces</h3>
+            <p class="muted small">Manage people the security system recognizes.</p>
+          </div>
+          <div id="faces-list" class="faces-list">
+            <p class="muted">Loading faces...</p>
+          </div>
+
+          <div class="enroll-form">
+            <h4>Enroll New Face</h4>
+            <div class="row">
+              <label for="enroll-name">Name</label>
+              <input type="text" id="enroll-name" placeholder="Enter name" />
+            </div>
+            <div class="row">
+              <label for="enroll-images">Images</label>
+              <div class="file-input-wrapper">
+                <input type="file" id="enroll-images" accept="image/*" multiple />
+                <span id="file-count" class="muted">No files selected</span>
+              </div>
+            </div>
+            <div class="row row-save">
+              <label></label>
+              <div class="actions">
+                <button id="enroll-btn">Enroll Face</button>
+                <span id="enroll-status" class="status"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p id="security-status" class="status"></p>
+      </div>
+
+      <!-- API Key Panel -->
+      <div id="configured" class="panel hidden">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Credentials</p>
+            <h2>API key ready</h2>
+          </div>
+          <span class="chip chip-ok">Connected</span>
+        </div>
+        <p class="muted">OpenAI API key is configured. The security guard is ready to operate.</p>
+        <button id="change-key-btn" class="ghost">Change API key</button>
+      </div>
+
+      <div id="form-panel" class="panel hidden">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Credentials</p>
+            <h2>Connect OpenAI</h2>
+          </div>
+          <span class="chip">Required</span>
+        </div>
+        <p class="muted">Paste your API key once and we will store it locally for the conversation loop.</p>
+        <label for="api-key">OpenAI API Key</label>
+        <input id="api-key" type="password" placeholder="sk-..." autocomplete="off" />
+        <div class="actions">
+          <button id="save-btn">Save key</button>
+          <p id="status" class="status"></p>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/main.js"></script>
+  </body>
+  </html>

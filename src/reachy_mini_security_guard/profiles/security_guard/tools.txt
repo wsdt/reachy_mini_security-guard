@@ -1,0 +1,16 @@
+# Security Guard Tools
+
+# Core security tool - REQUIRED
+alert_intruder
+
+# Movement and expression
+play_emotion
+move_head
+head_tracking
+
+# Dance for special occasions (optional)
+dance
+stop_dance
+
+# Utility
+do_nothing

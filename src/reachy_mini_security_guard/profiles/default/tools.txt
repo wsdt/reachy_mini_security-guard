@@ -1,0 +1,10 @@
+# Default tools for security guard
+alert_intruder
+dance
+stop_dance
+play_emotion
+stop_emotion
+camera
+do_nothing
+head_tracking
+move_head

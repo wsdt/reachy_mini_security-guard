@@ -7,7 +7,7 @@ from unittest.mock import Mock, MagicMock, patch
 import numpy as np
 import pytest
 
-from reachy_mini_conversation_app.vision.processors import (
+from reachy_mini_security_guard.vision.processors import (
     VisionConfig,
     VisionManager,
     VisionProcessor,
@@ -50,7 +50,7 @@ def test_vision_config_custom_values() -> None:
 @pytest.fixture
 def mock_torch() -> Any:
     """Mock torch module to avoid loading actual models."""
-    with patch("reachy_mini_conversation_app.vision.processors.torch") as mock:
+    with patch("reachy_mini_security_guard.vision.processors.torch") as mock:
         mock.cuda.is_available.return_value = False
         mock.backends.mps.is_available.return_value = False
         mock.float32 = "float32"
@@ -61,8 +61,8 @@ def mock_torch() -> Any:
 @pytest.fixture
 def mock_transformers() -> Any:
     """Mock transformers module."""
-    with patch("reachy_mini_conversation_app.vision.processors.AutoProcessor") as proc, \
-         patch("reachy_mini_conversation_app.vision.processors.AutoModelForImageTextToText") as model:
+    with patch("reachy_mini_security_guard.vision.processors.AutoProcessor") as proc, \
+         patch("reachy_mini_security_guard.vision.processors.AutoModelForImageTextToText") as model:
 
         # Mock processor
         mock_processor = MagicMock()
@@ -150,7 +150,7 @@ def test_vision_processor_initialization(mock_torch: Any, mock_transformers: Any
 
 def test_vision_processor_initialization_failure(mock_torch: Any) -> None:
     """Test VisionProcessor handles initialization failure gracefully."""
-    with patch("reachy_mini_conversation_app.vision.processors.AutoProcessor") as mock_proc:
+    with patch("reachy_mini_security_guard.vision.processors.AutoProcessor") as mock_proc:
         mock_proc.from_pretrained.side_effect = Exception("Model not found")
 
         config = VisionConfig(model_path="invalid/model")
@@ -172,7 +172,7 @@ def test_vision_processor_process_image_not_initialized(mock_torch: Any) -> None
 
 def test_vision_processor_process_image_success(mock_torch: Any, mock_transformers: Any) -> None:
     """Test process_image processes an image successfully."""
-    with patch("reachy_mini_conversation_app.vision.processors.cv2") as mock_cv2:
+    with patch("reachy_mini_security_guard.vision.processors.cv2") as mock_cv2:
         # Mock cv2.imencode to return success
         mock_cv2.imencode.return_value = (True, np.array([1, 2, 3], dtype=np.uint8))
         mock_cv2.IMWRITE_JPEG_QUALITY = 1
@@ -189,7 +189,7 @@ def test_vision_processor_process_image_success(mock_torch: Any, mock_transforme
 
 def test_vision_processor_process_image_encode_failure(mock_torch: Any, mock_transformers: Any) -> None:
     """Test process_image handles image encoding failure."""
-    with patch("reachy_mini_conversation_app.vision.processors.cv2") as mock_cv2:
+    with patch("reachy_mini_security_guard.vision.processors.cv2") as mock_cv2:
         mock_cv2.imencode.return_value = (False, None)
         mock_cv2.IMWRITE_JPEG_QUALITY = 1
 
@@ -204,7 +204,7 @@ def test_vision_processor_process_image_encode_failure(mock_torch: Any, mock_tra
 
 def test_vision_processor_process_image_with_retry(mock_torch: Any, mock_transformers: Any) -> None:
     """Test process_image retries on failure."""
-    with patch("reachy_mini_conversation_app.vision.processors.cv2") as mock_cv2:
+    with patch("reachy_mini_security_guard.vision.processors.cv2") as mock_cv2:
         mock_cv2.imencode.return_value = (True, np.array([1, 2, 3], dtype=np.uint8))
         mock_cv2.IMWRITE_JPEG_QUALITY = 1
 
@@ -286,7 +286,7 @@ def test_vision_manager_initialization(mock_torch: Any, mock_transformers: Any, 
 
 def test_vision_manager_initialization_failure(mock_torch: Any, mock_camera: Mock) -> None:
     """Test VisionManager raises error when processor initialization fails."""
-    with patch("reachy_mini_conversation_app.vision.processors.AutoProcessor") as mock_proc:
+    with patch("reachy_mini_security_guard.vision.processors.AutoProcessor") as mock_proc:
         mock_proc.from_pretrained.side_effect = Exception("Model not found")
 
         with pytest.raises(RuntimeError, match="Vision processor initialization failed"):
@@ -311,7 +311,7 @@ def test_vision_manager_start_stop(mock_torch: Any, mock_transformers: Any, mock
 
 def test_vision_manager_processes_frames(mock_torch: Any, mock_transformers: Any, mock_camera: Mock) -> None:
     """Test VisionManager processes frames at intervals."""
-    with patch("reachy_mini_conversation_app.vision.processors.cv2") as mock_cv2:
+    with patch("reachy_mini_security_guard.vision.processors.cv2") as mock_cv2:
         mock_cv2.imencode.return_value = (True, np.array([1, 2, 3], dtype=np.uint8))
         mock_cv2.IMWRITE_JPEG_QUALITY = 1
 
@@ -343,7 +343,7 @@ def test_vision_manager_handles_none_frame(mock_torch: Any, mock_transformers: A
 
 def test_vision_manager_handles_processing_error(mock_torch: Any, mock_transformers: Any, mock_camera: Mock) -> None:
     """Test VisionManager handles processing errors gracefully."""
-    with patch("reachy_mini_conversation_app.vision.processors.cv2") as mock_cv2:
+    with patch("reachy_mini_security_guard.vision.processors.cv2") as mock_cv2:
         mock_cv2.imencode.side_effect = Exception("Processing error")
         mock_cv2.IMWRITE_JPEG_QUALITY = 1
 
@@ -372,7 +372,7 @@ def test_vision_manager_get_status(mock_torch: Any, mock_transformers: Any, mock
 
 def test_vision_manager_skips_invalid_responses(mock_torch: Any, mock_transformers: Any, mock_camera: Mock) -> None:
     """Test VisionManager doesn't update timestamp for invalid responses."""
-    with patch("reachy_mini_conversation_app.vision.processors.cv2") as mock_cv2:
+    with patch("reachy_mini_security_guard.vision.processors.cv2") as mock_cv2:
         mock_cv2.imencode.return_value = (True, np.array([1, 2, 3], dtype=np.uint8))
         mock_cv2.IMWRITE_JPEG_QUALITY = 1
 
@@ -394,9 +394,9 @@ def test_vision_manager_skips_invalid_responses(mock_torch: Any, mock_transforme
 
 def test_initialize_vision_manager_success(mock_torch: Any, mock_transformers: Any, mock_camera: Mock) -> None:
     """Test initialize_vision_manager creates VisionManager successfully."""
-    with patch("reachy_mini_conversation_app.vision.processors.snapshot_download") as mock_download, \
-         patch("reachy_mini_conversation_app.vision.processors.os.makedirs"), \
-         patch("reachy_mini_conversation_app.vision.processors.config") as mock_config:
+    with patch("reachy_mini_security_guard.vision.processors.snapshot_download") as mock_download, \
+         patch("reachy_mini_security_guard.vision.processors.os.makedirs"), \
+         patch("reachy_mini_security_guard.vision.processors.config") as mock_config:
 
         mock_config.LOCAL_VISION_MODEL = "test/model"
         mock_config.HF_HOME = "/tmp/hf_cache"
@@ -410,9 +410,9 @@ def test_initialize_vision_manager_success(mock_torch: Any, mock_transformers: A
 
 def test_initialize_vision_manager_download_failure(mock_torch: Any, mock_camera: Mock) -> None:
     """Test initialize_vision_manager handles download failure."""
-    with patch("reachy_mini_conversation_app.vision.processors.snapshot_download") as mock_download, \
-         patch("reachy_mini_conversation_app.vision.processors.os.makedirs"), \
-         patch("reachy_mini_conversation_app.vision.processors.config") as mock_config:
+    with patch("reachy_mini_security_guard.vision.processors.snapshot_download") as mock_download, \
+         patch("reachy_mini_security_guard.vision.processors.os.makedirs"), \
+         patch("reachy_mini_security_guard.vision.processors.config") as mock_config:
 
         mock_config.LOCAL_VISION_MODEL = "test/model"
         mock_config.HF_HOME = "/tmp/hf_cache"
@@ -425,10 +425,10 @@ def test_initialize_vision_manager_download_failure(mock_torch: Any, mock_camera
 
 def test_initialize_vision_manager_processor_failure(mock_torch: Any, mock_camera: Mock) -> None:
     """Test initialize_vision_manager handles processor initialization failure."""
-    with patch("reachy_mini_conversation_app.vision.processors.snapshot_download"), \
-         patch("reachy_mini_conversation_app.vision.processors.os.makedirs"), \
-         patch("reachy_mini_conversation_app.vision.processors.config") as mock_config, \
-         patch("reachy_mini_conversation_app.vision.processors.AutoProcessor") as mock_proc:
+    with patch("reachy_mini_security_guard.vision.processors.snapshot_download"), \
+         patch("reachy_mini_security_guard.vision.processors.os.makedirs"), \
+         patch("reachy_mini_security_guard.vision.processors.config") as mock_config, \
+         patch("reachy_mini_security_guard.vision.processors.AutoProcessor") as mock_proc:
 
         mock_config.LOCAL_VISION_MODEL = "test/model"
         mock_config.HF_HOME = "/tmp/hf_cache"
@@ -441,7 +441,7 @@ def test_initialize_vision_manager_processor_failure(mock_torch: Any, mock_camer
 
 def test_vision_processor_cuda_oom_recovery(mock_torch: Any, mock_transformers: Any) -> None:
     """Test VisionProcessor recovers from CUDA OOM errors."""
-    with patch("reachy_mini_conversation_app.vision.processors.cv2") as mock_cv2:
+    with patch("reachy_mini_security_guard.vision.processors.cv2") as mock_cv2:
         mock_cv2.imencode.return_value = (True, np.array([1, 2, 3], dtype=np.uint8))
         mock_cv2.IMWRITE_JPEG_QUALITY = 1
 
@@ -463,7 +463,7 @@ def test_vision_processor_cuda_oom_recovery(mock_torch: Any, mock_transformers: 
 
 def test_vision_processor_cache_cleanup_mps(mock_torch: Any, mock_transformers: Any) -> None:
     """Test VisionProcessor cleans up MPS cache after processing."""
-    with patch("reachy_mini_conversation_app.vision.processors.cv2") as mock_cv2:
+    with patch("reachy_mini_security_guard.vision.processors.cv2") as mock_cv2:
         mock_cv2.imencode.return_value = (True, np.array([1, 2, 3], dtype=np.uint8))
         mock_cv2.IMWRITE_JPEG_QUALITY = 1
 
@@ -480,7 +480,7 @@ def test_vision_processor_cache_cleanup_mps(mock_torch: Any, mock_transformers: 
 
 def test_vision_manager_thread_safety(mock_torch: Any, mock_transformers: Any, mock_camera: Mock) -> None:
     """Test VisionManager thread safety with multiple start/stop cycles."""
-    with patch("reachy_mini_conversation_app.vision.processors.cv2") as mock_cv2:
+    with patch("reachy_mini_security_guard.vision.processors.cv2") as mock_cv2:
         mock_cv2.imencode.return_value = (True, np.array([1, 2, 3], dtype=np.uint8))
         mock_cv2.IMWRITE_JPEG_QUALITY = 1
 
